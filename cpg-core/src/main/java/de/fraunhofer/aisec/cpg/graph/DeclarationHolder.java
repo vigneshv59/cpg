@@ -31,6 +31,7 @@ import de.fraunhofer.aisec.cpg.graph.edge.PropertyEdge;
 import java.util.Collection;
 import java.util.List;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.jetbrains.annotations.NotNull;
 
 public interface DeclarationHolder {
 
@@ -87,4 +88,8 @@ public interface DeclarationHolder {
 
   @NonNull
   List<Declaration> getDeclarations();
+
+  default void plusAssign(@NotNull Declaration declaration) {
+    this.addDeclaration(declaration);
+  }
 }

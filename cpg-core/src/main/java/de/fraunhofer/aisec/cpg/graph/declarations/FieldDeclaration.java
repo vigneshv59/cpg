@@ -25,17 +25,15 @@
  */
 package de.fraunhofer.aisec.cpg.graph.declarations;
 
-import de.fraunhofer.aisec.cpg.graph.HasInitializer;
-import de.fraunhofer.aisec.cpg.graph.HasType;
+import de.fraunhofer.aisec.cpg.graph.*;
 import de.fraunhofer.aisec.cpg.graph.HasType.TypeListener;
-import de.fraunhofer.aisec.cpg.graph.Node;
-import de.fraunhofer.aisec.cpg.graph.SubGraph;
-import de.fraunhofer.aisec.cpg.graph.TypeManager;
+import de.fraunhofer.aisec.cpg.graph.statements.expressions.BinaryOperator;
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.Expression;
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.InitializerListExpression;
 import de.fraunhofer.aisec.cpg.graph.types.Type;
 import java.util.*;
 import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.neo4j.ogm.annotation.Relationship;
 
@@ -199,5 +197,22 @@ public class FieldDeclaration extends ValueDeclaration implements TypeListener, 
   @Override
   public int hashCode() {
     return super.hashCode();
+  }
+
+  @Override
+  public void addArgument(@NotNull Expression expression) {
+    HasInitializer.DefaultImpls.addArgument(this, expression);
+  }
+
+  @NotNull
+  @Override
+  public BinaryOperator plus(@NotNull Expression $this$plus, @NotNull Expression rhs) {
+    return ArgumentHolder.DefaultImpls.plus(this, $this$plus, rhs);
+  }
+
+  @NotNull
+  @Override
+  public BinaryOperator minus(@NotNull Expression $this$plus, @NotNull Expression rhs) {
+    return ArgumentHolder.DefaultImpls.minus(this, $this$plus, rhs);
   }
 }

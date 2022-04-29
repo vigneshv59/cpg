@@ -25,6 +25,7 @@
  */
 package de.fraunhofer.aisec.cpg.graph.statements.expressions;
 
+import de.fraunhofer.aisec.cpg.graph.ArgumentHolder;
 import de.fraunhofer.aisec.cpg.graph.HasInitializer;
 import de.fraunhofer.aisec.cpg.graph.Node;
 import de.fraunhofer.aisec.cpg.graph.SubGraph;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Objects;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.NotNull;
 import org.neo4j.ogm.annotation.Relationship;
 
 /** Represents the creation of a new object through the <code>new</code> keyword. */
@@ -89,5 +91,22 @@ public class NewExpression extends Expression implements HasInitializer {
   @Override
   public int hashCode() {
     return super.hashCode();
+  }
+
+  @Override
+  public void addArgument(@NotNull Expression expression) {
+    HasInitializer.DefaultImpls.addArgument(this, expression);
+  }
+
+  @NotNull
+  @Override
+  public BinaryOperator plus(@NotNull Expression $this$plus, @NotNull Expression rhs) {
+    return ArgumentHolder.DefaultImpls.plus(this, $this$plus, rhs);
+  }
+
+  @NotNull
+  @Override
+  public BinaryOperator minus(@NotNull Expression $this$plus, @NotNull Expression rhs) {
+    return ArgumentHolder.DefaultImpls.minus(this, $this$plus, rhs);
   }
 }
