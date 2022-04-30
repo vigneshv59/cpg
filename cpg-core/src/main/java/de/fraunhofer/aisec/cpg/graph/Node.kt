@@ -26,12 +26,14 @@
 package de.fraunhofer.aisec.cpg.graph
 
 import de.fraunhofer.aisec.cpg.frontends.Handler
+import de.fraunhofer.aisec.cpg.graph.declarations.RecordDeclaration
 import de.fraunhofer.aisec.cpg.graph.declarations.TypedefDeclaration
 import de.fraunhofer.aisec.cpg.graph.edge.Properties
 import de.fraunhofer.aisec.cpg.graph.edge.PropertyEdge
 import de.fraunhofer.aisec.cpg.graph.edge.PropertyEdge.Companion.unwrap
 import de.fraunhofer.aisec.cpg.helpers.LocationConverter
 import de.fraunhofer.aisec.cpg.helpers.SubgraphWalker
+import de.fraunhofer.aisec.cpg.passes.scopes.*
 import de.fraunhofer.aisec.cpg.processing.IVisitable
 import de.fraunhofer.aisec.cpg.sarif.PhysicalLocation
 import java.util.*
@@ -114,13 +116,14 @@ open class Node : IVisitable<Node>, Persistable {
 
     @field:Relationship(value = "DFG") var nextDFG: MutableSet<Node> = HashSet()
 
+    @Deprecated(message = "The typedef system is deprecated and will be reworked")
     var typedefs: MutableSet<TypedefDeclaration> = HashSet()
 
     /**
      * If a node is marked as being inferred, it means that it was created artificially and does not
-     * necessarily have a real counterpart in the scanned source code. However, the nodes
-     * represented should have been part of parser output and represents missing code that is
-     * inferred by the CPG construction, e.g. missing functions, records, files etc.
+     * necessarily have a real counterpart in the parsed source code. However, the nodes represented
+     * should have been part of parser output and represents missing code that is inferred by the
+     * CPG construction, e.g. missing functions, records, files etc.
      */
     var isInferred = false
 
@@ -134,7 +137,27 @@ open class Node : IVisitable<Node>, Persistable {
     /** Required field for object graph mapping. It contains the node id. */
     @field:Id @field:GeneratedValue var id: Long? = null
 
+    /**
+     * The current scope for this node at the time this node was created, but before
+     * [ScopeManager.enterScope] was called.
+     *
+     * TODO(oxisto): Does this make sense?
+     *
+     * Note, that for nodes that define a scope itself, such as a [RecordDeclaration], this will NOT
+     * be its [RecordScope], but rather the scope the declaration lives in, e.g., most likely the
+     * [GlobalScope] or a [NameScope] of a package. To retrieve the scope that is defined by this
+     * node, the function [ScopeManager.lookupScope] must be used.
+     */
+    var scope: Scope? = null
+
+    /**
+     * The parent of this node. This node will be part of the future AST parent system, for now do
+     * not count on this to be populated.
+     */
+    var parent: Node? = null
+
     /** Index of the argument if this node is used in a function call or parameter list. */
+    @Deprecated(message = "This property is deprecated and property edges should be used instead.")
     var argumentIndex = 0
 
     /** List of annotations associated with that node. */
@@ -187,6 +210,7 @@ open class Node : IVisitable<Node>, Persistable {
         }
     }
 
+    @Deprecated(message = "The typedef system is deprecated and will be reworked")
     fun addTypedef(typedef: TypedefDeclaration) {
         typedefs.add(typedef)
     }

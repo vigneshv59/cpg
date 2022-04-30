@@ -148,7 +148,10 @@ public class ObjectType extends Type implements HasType.SecondaryTypeEdge {
 
   @Override
   public Type duplicate() {
-    return new ObjectType(this, this.getGenerics(), this.modifier, this.primitive);
+    var type = new ObjectType(this, this.getGenerics(), this.modifier, this.primitive);
+    type.recordDeclaration = this.recordDeclaration;
+
+    return type;
   }
 
   public void setGenerics(List<Type> generics) {

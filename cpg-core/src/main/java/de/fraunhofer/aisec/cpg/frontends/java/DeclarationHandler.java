@@ -29,13 +29,7 @@ import static de.fraunhofer.aisec.cpg.graph.NodeBuilder.*;
 
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.AnnotationDeclaration;
-import com.github.javaparser.ast.body.AnnotationMemberDeclaration;
-import com.github.javaparser.ast.body.BodyDeclaration;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.InitializerDeclaration;
-import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -47,6 +41,8 @@ import de.fraunhofer.aisec.cpg.graph.NodeBuilder;
 import de.fraunhofer.aisec.cpg.graph.ProblemNode;
 import de.fraunhofer.aisec.cpg.graph.TypeManager;
 import de.fraunhofer.aisec.cpg.graph.declarations.*;
+import de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration;
+import de.fraunhofer.aisec.cpg.graph.declarations.RecordDeclaration;
 import de.fraunhofer.aisec.cpg.graph.statements.CompoundStatement;
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.Expression;
 import de.fraunhofer.aisec.cpg.graph.types.*;
@@ -145,6 +141,10 @@ public class DeclarationHandler
             true);
     declaration.setType(type);
 
+    var record = lang.getScopeManager().getCurrentRecord();
+
+    createMethodReceiver(record, declaration);
+
     // check, if constructor has body (i.e. its not abstract or something)
     BlockStmt body = constructorDecl.getBody();
 
@@ -162,18 +162,15 @@ public class DeclarationHandler
       com.github.javaparser.ast.body.MethodDeclaration methodDecl) {
     ResolvedMethodDeclaration resolvedMethod = methodDecl.resolve();
 
-    var currentRecordDecl = lang.getScopeManager().getCurrentRecord();
+    var record = lang.getScopeManager().getCurrentRecord();
 
     de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration functionDeclaration =
         newMethodDeclaration(
-            resolvedMethod.getName(),
-            methodDecl.toString(),
-            methodDecl.isStatic(),
-            currentRecordDecl);
+            resolvedMethod.getName(), methodDecl.toString(), methodDecl.isStatic(), record);
 
     lang.getScopeManager().enterScope(functionDeclaration);
 
-    createMethodReceiver(currentRecordDecl, functionDeclaration);
+    createMethodReceiver(record, functionDeclaration);
 
     functionDeclaration.addThrowTypes(
         methodDecl.getThrownExceptions().stream()
@@ -304,13 +301,13 @@ public class DeclarationHandler
       } else if (decl instanceof com.github.javaparser.ast.body.MethodDeclaration) {
         de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration md =
             (de.fraunhofer.aisec.cpg.graph.declarations.MethodDeclaration) handle(decl);
-        recordDeclaration.addMethod(md);
+        lang.getScopeManager().addDeclaration(md);
       } else if (decl instanceof com.github.javaparser.ast.body.ConstructorDeclaration) {
         de.fraunhofer.aisec.cpg.graph.declarations.ConstructorDeclaration c =
             (de.fraunhofer.aisec.cpg.graph.declarations.ConstructorDeclaration) handle(decl);
-        recordDeclaration.addConstructor(c);
+        lang.getScopeManager().addDeclaration(c);
       } else if (decl instanceof com.github.javaparser.ast.body.ClassOrInterfaceDeclaration) {
-        recordDeclaration.addDeclaration(handle(decl));
+        lang.getScopeManager().addDeclaration((handle(decl)));
       } else if (decl instanceof com.github.javaparser.ast.body.InitializerDeclaration) {
         InitializerDeclaration id = (InitializerDeclaration) decl;
         CompoundStatement initializerBlock =
@@ -347,12 +344,7 @@ public class DeclarationHandler
 
       var field =
           NodeBuilder.newFieldDeclaration(
-              scope.getSimpleName() + ".this",
-              TypeParser.createFrom(scope.getScopedName(), false),
-              null,
-              null,
-              null,
-              false);
+              scope.getSimpleName() + ".this", TypeParser.createFrom(scope.getScopedName(), false));
       field.setImplicit(true);
 
       lang.getScopeManager().enterScope(recordDeclaration);
@@ -410,7 +402,8 @@ public class DeclarationHandler
             variable.toString(),
             location,
             initializer,
-            false);
+            false,
+            lang);
     lang.getScopeManager().addDeclaration(fieldDeclaration);
 
     this.lang.processAnnotations(fieldDeclaration, fieldDecl);

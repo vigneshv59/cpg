@@ -90,6 +90,8 @@ public class LoopScope extends ValueDeclarationScope implements Breakable, Conti
   }
 
   public List<Node> starts() {
+    var astNode = getAstNode();
+
     if (astNode instanceof WhileStatement) {
       WhileStatement ws = (WhileStatement) astNode;
       if (ws.getConditionDeclaration() != null)

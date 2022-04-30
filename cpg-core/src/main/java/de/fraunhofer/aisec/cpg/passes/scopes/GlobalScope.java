@@ -50,7 +50,7 @@ public class GlobalScope extends StructureDeclarationScope {
       // TODO what to do with astNode?
       for (Scope child : other.getChildren()) {
         child.setParent(this);
-        this.children.add(child);
+        this.getChildren().add(child);
       }
     }
   }

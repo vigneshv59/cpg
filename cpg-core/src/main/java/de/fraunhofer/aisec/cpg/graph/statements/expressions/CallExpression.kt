@@ -27,6 +27,7 @@ package de.fraunhofer.aisec.cpg.graph.statements.expressions
 
 import de.fraunhofer.aisec.cpg.graph.*
 import de.fraunhofer.aisec.cpg.graph.HasType.SecondaryTypeEdge
+import de.fraunhofer.aisec.cpg.graph.declarations.Declaration
 import de.fraunhofer.aisec.cpg.graph.declarations.FunctionDeclaration
 import de.fraunhofer.aisec.cpg.graph.declarations.TemplateDeclaration
 import de.fraunhofer.aisec.cpg.graph.declarations.TemplateDeclaration.TemplateInitialization
@@ -38,20 +39,31 @@ import de.fraunhofer.aisec.cpg.graph.edge.PropertyEdge.Companion.unwrap
 import de.fraunhofer.aisec.cpg.graph.edge.PropertyEdgeDelegate
 import de.fraunhofer.aisec.cpg.graph.types.Type
 import de.fraunhofer.aisec.cpg.helpers.Util
-import de.fraunhofer.aisec.cpg.passes.CallResolver
+import de.fraunhofer.aisec.cpg.passes.CallResolution
+import de.fraunhofer.aisec.cpg.passes.Inference
+import de.fraunhofer.aisec.cpg.passes.NewResolver
 import java.util.*
 import org.apache.commons.lang3.builder.ToStringBuilder
 import org.neo4j.ogm.annotation.Relationship
 
 /**
- * An expression, which calls another function. It has a list of arguments (list of [Expression]s)
- * and is connected via the INVOKES edge to its [FunctionDeclaration].
+ * An expression, which calls an expression (the [callee]) with a list of arguments. The callee is
+ * usually a reference to a function (using a [DeclaredReferenceExpression]) or method (using a
+ * [MemberExpression]), but depending on the languages, other expressions also might be "callable".
+ *
+ * After call resolution, this expression connected via the `INVOKES` edge (see [invokesEdges]) to
+ * its [FunctionDeclaration].
  */
-open class CallExpression : Expression(), HasType.TypeListener, HasBase, SecondaryTypeEdge {
+open class CallExpression(callee: Expression? = null) :
+    Expression(),
+    HasType.TypeListener,
+    SecondaryTypeEdge,
+    ResolutionDecider<CallExpression, DeclaredReferenceExpression> {
+
     /** Connection to its [FunctionDeclaration]. This will be populated by the [CallResolver]. */
     @Relationship(value = "INVOKES", direction = Relationship.OUTGOING)
-    @PopulatedByPass(CallResolver::class)
-    var invokesRelationship = mutableListOf<PropertyEdge<FunctionDeclaration>>()
+    @PopulatedByPass(NewResolver::class)
+    var invokeEdges = mutableListOf<PropertyEdge<FunctionDeclaration>>()
         protected set
 
     /**
@@ -61,18 +73,18 @@ open class CallExpression : Expression(), HasType.TypeListener, HasBase, Seconda
     var invokes: List<FunctionDeclaration>
         get(): List<FunctionDeclaration> {
             val targets: MutableList<FunctionDeclaration> = ArrayList()
-            for (propertyEdge in invokesRelationship) {
+            for (propertyEdge in invokeEdges) {
                 targets.add(propertyEdge.end)
             }
             return Collections.unmodifiableList(targets)
         }
         set(value) {
-            unwrap(invokesRelationship).forEach {
+            unwrap(invokeEdges).forEach {
                 it.unregisterTypeListener(this)
                 Util.detachCallParameters(it, arguments)
                 removePrevDFG(it)
             }
-            invokesRelationship = transformIntoOutgoingPropertyEdgeList(value, this)
+            invokeEdges = transformIntoOutgoingPropertyEdgeList(value, this)
             value.forEach {
                 it.registerTypeListener(this)
                 Util.attachCallParameters(it, arguments)
@@ -85,49 +97,57 @@ open class CallExpression : Expression(), HasType.TypeListener, HasBase, Seconda
      */
     @Relationship(value = "ARGUMENTS", direction = Relationship.OUTGOING)
     @field:SubGraph("AST")
-    var argumentsEdges = mutableListOf<PropertyEdge<Expression>>()
+    var argumentEdges = mutableListOf<PropertyEdge<Expression>>()
 
     /**
      * The list of arguments as a simple list. This is a delegated property delegated to
-     * [argumentsEdges].
+     * [argumentEdges].
      */
-    var arguments by PropertyEdgeDelegate(CallExpression::argumentsEdges)
+    var arguments by PropertyEdgeDelegate(CallExpression::argumentEdges)
 
     /**
-     * The base object. This is marked as an AST child, because this is required for a
-     * [MemberCallExpression]. Be aware that for simple calls the implicit "this" base is not part
-     * of the original AST, but we treat it as such for better consistency
+     * The expression we are trying to "call". In most cases this is a [DeclaredReferenceExpression]
+     * to a function or a [MemberExpression] for a member call. However, there might be other
+     * expression one is trying to call, depending on the language.
+     *
+     * For now, this is nullable, because of [ConstructExpression] does not have a callee, but
+     * depends on [CallExpression].
      */
     @field:SubGraph("AST")
-    override var base: Expression? = null
+    var callee: Expression? = null
         set(value) {
-            field?.unregisterTypeListener(this)
+            // We also want to update this node's name, based on the callee. This is purely for
+            // readability reasons
             field = value
-            value?.registerTypeListener(this)
+            this.name = value?.name ?: ""
+
+            // Register this call as the resolution decider
+            val needsResolution = callee as? NeedsResolution<DeclaredReferenceExpression>
+            needsResolution?.resolutionDecider = this
         }
 
     var fqn: String? = null
 
     fun setArgument(index: Int, argument: Expression) {
-        argumentsEdges[index].end = argument
+        argumentEdges[index].end = argument
     }
 
     /** Adds the specified [expression] with an optional [name] to this call. */
     @JvmOverloads
     fun addArgument(expression: Expression, name: String? = null) {
         val edge = PropertyEdge(this, expression)
-        edge.addProperty(Properties.INDEX, argumentsEdges.size)
+        edge.addProperty(Properties.INDEX, argumentEdges.size)
 
         if (name != null) {
             edge.addProperty(Properties.NAME, name)
         }
 
-        argumentsEdges.add(edge)
+        argumentEdges.add(edge)
     }
 
     /** Returns the function signature as list of types of the call arguments. */
     val signature: List<Type>
-        get() = argumentsEdges.map { it.end.type }
+        get() = argumentEdges.map { it.end.type }
 
     /** Specifies, whether this call has any template arguments. */
     var template = false
@@ -241,26 +261,23 @@ open class CallExpression : Expression(), HasType.TypeListener, HasBase, Seconda
         if (!TypeManager.isTypeSystemActive()) {
             return
         }
-        if (src === base) {
-            fqn = src.getType().root.typeName + "." + name
-        } else {
-            val previous = type
-            val types =
-                invokesRelationship.map(PropertyEdge<FunctionDeclaration>::end).mapNotNull {
-                    // TODO(oxisto): Support multiple return values
-                    it.returnTypes.firstOrNull()
-                }
-            val alternative = if (types.isNotEmpty()) types[0] else null
-            val commonType = TypeManager.getInstance().getCommonType(types).orElse(alternative)
-            val subTypes: MutableList<Type> = ArrayList(possibleSubTypes)
 
-            subTypes.remove(oldType)
-            subTypes.addAll(types)
-            setType(commonType, root)
-            setPossibleSubTypes(subTypes, root)
-            if (previous != type) {
-                type.typeOrigin = Type.Origin.DATAFLOW
+        val previous = type
+        val types =
+            invokeEdges.map(PropertyEdge<FunctionDeclaration>::end).mapNotNull {
+                // TODO(oxisto): Support multiple return values
+                it.returnTypes.firstOrNull()
             }
+        val alternative = if (types.isNotEmpty()) types[0] else null
+        val commonType = TypeManager.getInstance().getCommonType(types).orElse(alternative)
+        val subTypes: MutableList<Type> = ArrayList(possibleSubTypes)
+
+        subTypes.remove(oldType)
+        subTypes.addAll(types)
+        setType(commonType, root)
+        setPossibleSubTypes(subTypes, root)
+        if (previous != type) {
+            type.typeOrigin = Type.Origin.DATAFLOW
         }
     }
 
@@ -268,18 +285,14 @@ open class CallExpression : Expression(), HasType.TypeListener, HasBase, Seconda
         if (!TypeManager.isTypeSystemActive()) {
             return
         }
-        if (src !== base) {
-            val subTypes: MutableList<Type> = ArrayList(possibleSubTypes)
-            subTypes.addAll(src.possibleSubTypes)
-            setPossibleSubTypes(subTypes, root)
-        }
+
+        val subTypes: MutableList<Type> = ArrayList(possibleSubTypes)
+        subTypes.addAll(src.possibleSubTypes)
+        setPossibleSubTypes(subTypes, root)
     }
 
     override fun toString(): String {
-        return ToStringBuilder(this, TO_STRING_STYLE)
-            .appendSuper(super.toString())
-            .append("base", base)
-            .toString()
+        return ToStringBuilder(this, TO_STRING_STYLE).appendSuper(super.toString()).toString()
     }
 
     override fun equals(other: Any?): Boolean {
@@ -289,17 +302,20 @@ open class CallExpression : Expression(), HasType.TypeListener, HasBase, Seconda
         if (other !is CallExpression) {
             return false
         }
-
-        return (((super.equals(other) &&
+        return (super.equals(other) &&
             arguments == other.arguments &&
-            propertyEqualsList(argumentsEdges, other.argumentsEdges)) &&
+            propertyEqualsList(argumentEdges, other.argumentEdges) &&
             invokes == other.invokes &&
-            propertyEqualsList(invokesRelationship, other.invokesRelationship)) &&
-            base == other.base &&
-            templateParameters == other.templateParameters &&
-            propertyEqualsList(templateParametersEdges, other.templateParametersEdges)) &&
-            templateInstantiation == other.templateInstantiation &&
-            template == other.template
+            propertyEqualsList(invokeEdges, other.invokeEdges) &&
+            (templateParameters == other.templateParameters ||
+                templateParameters == other.templateParameters &&
+                    propertyEqualsList(
+                        templateParametersEdges!!,
+                        other.templateParametersEdges!!
+                    )) &&
+            (templateInstantiation == other.templateInstantiation ||
+                templateInstantiation == other.templateInstantiation) &&
+            template == other.template)
     }
 
     override fun hashCode(): Int {
@@ -314,5 +330,13 @@ open class CallExpression : Expression(), HasType.TypeListener, HasBase, Seconda
                 }
             }
         }
+    }
+
+    override fun decide(
+        symbols: List<Declaration>,
+        source: DeclaredReferenceExpression,
+        inference: Inference?
+    ): Declaration? {
+        return CallResolution.decide(this, source, symbols, inference)
     }
 }

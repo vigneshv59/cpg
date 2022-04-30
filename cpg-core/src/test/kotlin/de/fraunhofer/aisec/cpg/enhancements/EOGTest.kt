@@ -202,7 +202,7 @@ internal class EOGTest : BaseTest() {
                     bo
                 )
             )
-            assertTrue(bo.lhs.nextEOG.size == 2)
+            assertTrue(bo.lhs?.nextEOG?.size == 2)
         }
     }
 

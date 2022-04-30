@@ -70,7 +70,7 @@ import org.slf4j.LoggerFactory;
  *       of the methods as a node.
  * </ul>
  */
-@DependsOn(CallResolver.class)
+@DependsOn(NewResolver.class)
 public class EvaluationOrderGraphPass extends Pass {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EvaluationOrderGraphPass.class);
@@ -476,8 +476,9 @@ public class EvaluationOrderGraphPass extends Pass {
     // out for java, but impossible for c++)
 
     // evaluate base first, if there is one
-    if (callExpression instanceof MemberCallExpression && callExpression.getBase() != null) {
-      createEOG(callExpression.getBase());
+    if (callExpression instanceof MemberCallExpression
+        && ((MemberCallExpression) callExpression).getBase() != null) {
+      createEOG(((MemberCallExpression) callExpression).getBase());
     }
 
     // first the arguments

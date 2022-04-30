@@ -52,6 +52,8 @@ public class StructureDeclarationScope extends ValueDeclarationScope {
   private void addStructureDeclaration(@NotNull Declaration declaration) {
     structureDeclarations.add(declaration);
 
+    var astNode = getAstNode();
+
     if (astNode instanceof DeclarationHolder) {
       var holder = (DeclarationHolder) astNode;
       holder.addDeclaration(declaration);

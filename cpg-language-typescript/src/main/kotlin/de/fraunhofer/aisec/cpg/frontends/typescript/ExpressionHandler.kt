@@ -197,7 +197,7 @@ class ExpressionHandler(lang: TypeScriptLanguageFrontend) :
     private fun handlePropertyAccessExpression(node: TypeScriptNode): Expression {
         val base = this.handle(node.children?.first())
 
-        val name = this.lang.getCodeFromRawNode(node.children?.last())
+        val name = this.lang.getCodeFromRawNode(node.children?.last()) ?: ""
 
         val memberExpression =
             NodeBuilder.newMemberExpression(
@@ -205,7 +205,8 @@ class ExpressionHandler(lang: TypeScriptLanguageFrontend) :
                 UnknownType.getUnknownType(),
                 name,
                 ".",
-                this.lang.getCodeFromRawNode(node)
+                this.lang.getCodeFromRawNode(node),
+                lang
             )
 
         return memberExpression
@@ -234,21 +235,18 @@ class ExpressionHandler(lang: TypeScriptLanguageFrontend) :
             val fqn = memberExpression.name
             call =
                 NodeBuilder.newMemberCallExpression(
-                    memberExpression.name,
+                    memberExpression,
                     fqn,
-                    memberExpression.base,
-                    member,
-                    ".",
                     this.lang.getCodeFromRawNode(node)
                 )
         } else {
-            val name = this.lang.getIdentifierName(node)
+            val ref = this.handle(node.firstChild("Identifier"))
 
             // TODO: fqn - how?
-            val fqn = name
+            val fqn = ref.name
             // regular function call
             call =
-                NodeBuilder.newCallExpression(name, fqn, this.lang.getCodeFromRawNode(node), false)
+                NodeBuilder.newCallExpression(ref, fqn, this.lang.getCodeFromRawNode(node), false)
         }
 
         // parse the arguments. the first node is the identifier, so we skip that

@@ -49,7 +49,8 @@ public class NameScope extends StructureDeclarationScope {
     } else {
       this.namePrefix = node.getName();
     }
-    this.astNode = node;
+
+    this.setAstNode(node);
   }
 
   public String getNamePrefix() {
@@ -62,7 +63,7 @@ public class NameScope extends StructureDeclarationScope {
 
   public String getSimpleName() {
     // Split scoped named by delimiter
-    var names = this.scopedName.split(Pattern.quote(delimiter));
+    var names = this.getScopedName().split(Pattern.quote(delimiter));
 
     if (names.length > 0) {
       return names[names.length - 1];

@@ -399,7 +399,12 @@ class CXXLanguageFrontend(config: TranslationConfiguration, scopeManager: ScopeM
         val expression: Expression =
             when (token.tokenType) {
                 1 -> // a variable
-                NodeBuilder.newDeclaredReferenceExpression(code, UnknownType.getUnknownType(), code)
+                NodeBuilder.newDeclaredReferenceExpression(
+                        code,
+                        UnknownType.getUnknownType(),
+                        code,
+                        lang = this
+                    )
                 2 -> // an integer
                 NodeBuilder.newLiteral(code.toInt(), TypeParser.createFrom("int", true), code)
                 130 -> // a string

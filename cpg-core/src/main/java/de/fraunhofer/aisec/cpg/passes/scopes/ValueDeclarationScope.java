@@ -33,7 +33,11 @@ import de.fraunhofer.aisec.cpg.graph.declarations.Declaration;
 import de.fraunhofer.aisec.cpg.graph.declarations.TypedefDeclaration;
 import de.fraunhofer.aisec.cpg.graph.declarations.ValueDeclaration;
 import de.fraunhofer.aisec.cpg.graph.types.Type;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +56,7 @@ public class ValueDeclarationScope extends Scope {
   @NotNull private final Map<Type, TypedefDeclaration> typedefs = new HashMap<>();
 
   public ValueDeclarationScope(Node node) {
-    this.astNode = node;
+    this.setAstNode(node);
   }
 
   @NotNull
@@ -92,8 +96,8 @@ public class ValueDeclarationScope extends Scope {
     this.valueDeclarations.add(valueDeclaration);
 
     if (addToAST) {
-      if (astNode instanceof DeclarationHolder) {
-        var holder = (DeclarationHolder) astNode;
+      if (getAstNode() instanceof DeclarationHolder) {
+        var holder = (DeclarationHolder) getAstNode();
         holder.addDeclaration(valueDeclaration);
       } else {
         errorWithFileLocation(
@@ -108,5 +112,13 @@ public class ValueDeclarationScope extends Scope {
      ForStatement, SwitchStatement; and others where the location of declaration is somewhere
      deeper in the AST-subtree: CompoundStatement, AssertStatement.
     */
+  }
+
+  @NotNull
+  @Override
+  public List<Declaration> resolveSymbol(@NotNull String name) {
+    return valueDeclarations.stream()
+        .filter(declaration -> declaration.getName().equals(name))
+        .collect(Collectors.toList());
   }
 }

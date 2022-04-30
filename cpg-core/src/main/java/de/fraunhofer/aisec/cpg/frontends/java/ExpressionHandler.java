@@ -313,7 +313,7 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
       }
       base =
           NodeBuilder.newDeclaredReferenceExpression(
-              scope.asNameExpr().getNameAsString(), baseType, scope.toString());
+              scope.asNameExpr().getNameAsString(), baseType, scope.toString(), lang);
       ((DeclaredReferenceExpression) base).setStaticAccess(isStaticAccess);
 
       lang.setCodeAndRegion(base, fieldAccessExpr.getScope());
@@ -345,7 +345,7 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
         }
         base =
             NodeBuilder.newDeclaredReferenceExpression(
-                scope.asFieldAccessExpr().getNameAsString(), baseType, scope.toString());
+                scope.asFieldAccessExpr().getNameAsString(), baseType, scope.toString(), lang);
         ((DeclaredReferenceExpression) base).setStaticAccess(true);
       }
       lang.setCodeAndRegion(base, fieldAccessExpr.getScope());
@@ -395,7 +395,8 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
         fieldType,
         fieldAccessExpr.getName().getIdentifier(),
         ".",
-        fieldAccessExpr.toString());
+        fieldAccessExpr.toString(),
+        lang);
   }
 
   private Literal handleLiteralExpression(Expression expr) {
@@ -442,7 +443,8 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
         NodeBuilder.newDeclaredReferenceExpression(
             classExpr.toString().substring(classExpr.toString().lastIndexOf('.') + 1),
             type,
-            classExpr.toString());
+            classExpr.toString(),
+            lang);
     thisExpression.setStaticAccess(true);
     lang.setCodeAndRegion(thisExpression, classExpr);
 
@@ -456,7 +458,8 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
     Type type = TypeParser.createFrom(resolvedValueDeclaration.getQualifiedName(), true);
 
     DeclaredReferenceExpression thisExpression =
-        NodeBuilder.newDeclaredReferenceExpression(thisExpr.toString(), type, thisExpr.toString());
+        NodeBuilder.newDeclaredReferenceExpression(
+            thisExpr.toString(), type, thisExpr.toString(), lang);
     lang.setCodeAndRegion(thisExpression, thisExpr);
 
     return thisExpression;
@@ -468,7 +471,7 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
     // process
     DeclaredReferenceExpression superExpression =
         NodeBuilder.newDeclaredReferenceExpression(
-            expr.toString(), UnknownType.getUnknownType(), expr.toString());
+            expr.toString(), UnknownType.getUnknownType(), expr.toString(), lang);
     lang.setCodeAndRegion(superExpression, expr);
 
     return superExpression;
@@ -540,8 +543,11 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
           type = TypeParser.createFrom(symbol.getType().describe(), true);
         }
 
-        return NodeBuilder.newDeclaredReferenceExpression(
-            symbol.getName(), type, nameExpr.toString());
+        DeclaredReferenceExpression declaredReferenceExpression =
+            NodeBuilder.newDeclaredReferenceExpression(
+                symbol.getName(), type, nameExpr.toString(), lang);
+
+        return declaredReferenceExpression;
       }
     } catch (UnsolvedSymbolException ex) {
       String typeString;
@@ -562,7 +568,7 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
       var name = nameExpr.getNameAsString();
 
       DeclaredReferenceExpression declaredReferenceExpression =
-          NodeBuilder.newDeclaredReferenceExpression(name, t, nameExpr.toString());
+          NodeBuilder.newDeclaredReferenceExpression(name, t, nameExpr.toString(), lang);
 
       var recordDeclaration = this.lang.getScopeManager().getCurrentRecord();
 
@@ -575,8 +581,11 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
       Type t = TypeParser.createFrom("UNKNOWN4", true);
       log.info("Unresolved symbol: {}", nameExpr.getNameAsString());
 
-      return NodeBuilder.newDeclaredReferenceExpression(
-          nameExpr.getNameAsString(), t, nameExpr.toString());
+      DeclaredReferenceExpression declaredReferenceExpression =
+          NodeBuilder.newDeclaredReferenceExpression(
+              nameExpr.getNameAsString(), t, nameExpr.toString(), lang);
+
+      return declaredReferenceExpression;
     }
   }
 
@@ -703,16 +712,18 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
       }
 
       if (!isStatic) {
-        DeclaredReferenceExpression member =
-            NodeBuilder.newDeclaredReferenceExpression(name, UnknownType.getUnknownType(), "");
+        // TODO: we should probably have the same code as we would when parsing a field access
+
+        var callee =
+            NodeBuilder.newMemberExpression(
+                base, UnknownType.getUnknownType(), name, ".", null, lang);
 
         lang.setCodeAndRegion(
-            member,
+            callee,
             methodCallExpr
                 .getName()); // This will also overwrite the code set to the empty string set above
         callExpression =
-            NodeBuilder.newMemberCallExpression(
-                name, qualifiedName, base, member, ".", methodCallExpr.toString());
+            NodeBuilder.newMemberCallExpression(callee, qualifiedName, methodCallExpr.toString());
       } else {
         String targetClass;
         if (resolved != null) {
@@ -730,8 +741,30 @@ public class ExpressionHandler extends Handler<Statement, Expression, JavaLangua
                 name, qualifiedName, methodCallExpr.toString(), targetClass);
       }
     } else {
+      // In case there is no scope that (usually) means, that this is an member call expression
+      // using an implicit this
+      var record = lang.getScopeManager().getCurrentRecord();
+
+      Type type;
+      if (record != null) {
+        type = lang.getScopeManager().getCurrentRecord().toType();
+      } else {
+        type = UnknownType.getUnknownType();
+      }
+
+      var thisExpression = NodeBuilder.newDeclaredReferenceExpression("this", type, "this", lang);
+      thisExpression.setImplicit(true);
+
+      var callee =
+          NodeBuilder.newMemberExpression(
+              thisExpression, UnknownType.getUnknownType(), name, ".", null, lang);
+
+      lang.setCodeAndRegion(
+          callee,
+          methodCallExpr
+              .getName()); // This will also overwrite the code set to the empty string set above
       callExpression =
-          NodeBuilder.newCallExpression(name, qualifiedName, methodCallExpr.toString(), false);
+          NodeBuilder.newMemberCallExpression(callee, qualifiedName, methodCallExpr.toString());
     }
 
     callExpression.setType(TypeParser.createFrom(typeString, true));

@@ -512,7 +512,7 @@ internal class CXXLanguageFrontendTest : BaseTest() {
 
         var lhs = assignA.lhs
         var rhs = assignA.rhs
-        assertEquals("a", lhs.name)
+        assertEquals("a", lhs?.name)
         assertEquals(2, (rhs as? Literal<*>)?.value)
         assertRefersTo(assignA.lhs, a)
 
@@ -527,14 +527,14 @@ internal class CXXLanguageFrontendTest : BaseTest() {
 
         lhs = assignB.lhs
         rhs = assignB.rhs
-        assertEquals("a", lhs.name)
+        assertEquals("a", lhs?.name)
         assertTrue(rhs is DeclaredReferenceExpression)
         assertEquals("b", rhs.name)
         assertRefersTo(rhs, b)
 
         val assignBWithFunction = statements[4]
         assertTrue(assignBWithFunction is BinaryOperator)
-        assertEquals("a", assignBWithFunction.lhs.name)
+        assertEquals("a", assignBWithFunction.lhs?.name)
         assertTrue(assignBWithFunction.rhs is CallExpression)
 
         val call = assignBWithFunction.rhs as CallExpression
@@ -630,19 +630,19 @@ internal class CXXLanguageFrontendTest : BaseTest() {
         // a = b * 2
         var operator = statements[2] as? BinaryOperator
         assertNotNull(operator)
-        assertEquals("a", operator.lhs.name)
+        assertEquals("a", operator.lhs?.name)
         assertTrue(operator.rhs is BinaryOperator)
 
         var rhs = operator.rhs as BinaryOperator
         assertTrue(rhs.lhs is DeclaredReferenceExpression)
-        assertEquals("b", rhs.lhs.name)
+        assertEquals("b", rhs.lhs?.name)
         assertTrue(rhs.rhs is Literal<*>)
         assertEquals(2, (rhs.rhs as Literal<*>).value)
 
         // a = 1 * 1
         operator = statements[3] as? BinaryOperator
         assertNotNull(operator)
-        assertEquals("a", operator.lhs.name)
+        assertEquals("a", operator.lhs?.name)
         assertTrue(operator.rhs is BinaryOperator)
 
         rhs = operator.rhs as BinaryOperator

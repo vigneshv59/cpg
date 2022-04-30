@@ -101,7 +101,7 @@ internal class CXXSymbolConfigurationTest : BaseTest() {
 
         // should be a literal now
         val literal = binaryOperator.getRhsAs(Literal::class.java)
-        assertEquals("Hello World", literal.value)
+        assertEquals("Hello World", literal?.value)
 
         binaryOperator = funcDecl.getBodyStatementAs(1, BinaryOperator::class.java)
         assertNotNull(binaryOperator)
@@ -112,9 +112,9 @@ internal class CXXSymbolConfigurationTest : BaseTest() {
         assertEquals("+", add.operatorCode)
 
         val literal2 = add.getLhsAs(Literal::class.java)
-        assertEquals(2, literal2.value)
+        assertEquals(2, literal2?.value)
 
         val literal1 = add.getRhsAs(Literal::class.java)
-        assertEquals(1, literal1.value)
+        assertEquals(1, literal1?.value)
     }
 }

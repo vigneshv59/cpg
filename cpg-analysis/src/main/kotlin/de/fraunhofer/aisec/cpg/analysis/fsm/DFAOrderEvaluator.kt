@@ -243,7 +243,8 @@ open class DFAOrderEvaluator(
                 .filter { arg -> arg != null && consideredBases.contains(arg.id) }
                 .toMutableList()
         if (
-            node.base is DeclaredReferenceExpression &&
+            (node is MemberCallExpression) &&
+                node.base is DeclaredReferenceExpression &&
                 consideredBases.contains((node.base as DeclaredReferenceExpression).refersTo?.id)
         ) {
             allUsedBases.add((node.base as DeclaredReferenceExpression).refersTo)
