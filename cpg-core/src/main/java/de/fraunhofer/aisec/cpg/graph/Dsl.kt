@@ -26,6 +26,7 @@
 package de.fraunhofer.aisec.cpg.graph
 
 import de.fraunhofer.aisec.cpg.graph.declarations.FunctionDeclaration
+import de.fraunhofer.aisec.cpg.graph.declarations.ScopeHolder
 import de.fraunhofer.aisec.cpg.graph.declarations.VariableDeclaration
 import de.fraunhofer.aisec.cpg.graph.statements.CompoundStatement
 import de.fraunhofer.aisec.cpg.graph.statements.DeclarationStatement
@@ -37,16 +38,31 @@ import de.fraunhofer.aisec.cpg.graph.types.UnknownType
 inline fun <reified T : Node> new(
     name: String = "",
     type: Type = UnknownType.getUnknownType(),
+    parent: Node? = null,
     noinline init: ((T) -> Unit)? = null
 ): T {
+    // Create a new node instance
     val node = T::class::constructors.get().first().call()
+
+    // Set optional but encouraged properties, such as name and AST parent
     node.name = name
+    node.parent = parent
 
-    init?.let { init(node) }
-
+    // Set the type, if the node has one
     if (node is HasType) {
         node.type = type
     }
+
+    // Create any new scope, if the node holds one
+    if (node is ScopeHolder<*>) {
+        node.newScope(parent?.scope)
+    } else {
+        // Otherwise, the node is to be assumed to have its parent scope
+        node.scope = parent?.scope
+    }
+
+    // Invoke additional initializers
+    init?.let { init(node) }
 
     return node
 }
@@ -56,7 +72,7 @@ fun DeclarationHolder.function(
     name: String = "",
     init: FunctionDeclaration.() -> Unit
 ): FunctionDeclaration {
-    val node = new(name, init = init)
+    val node = new(name, parent = this as? Node, init = init)
 
     // TODO(oxisto): Use scope manager instead?
     this += node
@@ -65,9 +81,7 @@ fun DeclarationHolder.function(
 }
 
 fun FunctionDeclaration.body(init: CompoundStatement.() -> Unit): CompoundStatement {
-    val node = new(init = init)
-
-    init(node)
+    val node = new(parent = this, init = init)
 
     this.body = node
 
@@ -75,9 +89,7 @@ fun FunctionDeclaration.body(init: CompoundStatement.() -> Unit): CompoundStatem
 }
 
 fun StatementHolder.returnStmt(init: ReturnStatement.() -> Unit): ReturnStatement {
-    val node = new(init = init)
-
-    init(node)
+    val node = new(parent = this as? Node, init = init)
 
     this += node
 
@@ -89,7 +101,7 @@ fun StatementHolder.returnStmt(init: ReturnStatement.() -> Unit): ReturnStatemen
  * [DeclarationStatement].
  */
 fun StatementHolder.declare(init: DeclarationStatement.() -> Unit): DeclarationStatement {
-    val node = new(init = init)
+    val node = new(parent = this as? Node, init = init)
 
     this += node
 
@@ -100,9 +112,13 @@ fun DeclarationStatement.variable(
     name: String,
     init: (VariableDeclaration.() -> Unit)? = null
 ): VariableDeclaration {
-    val node = new(name, init = init)
+    val node = new(name, parent = this, init = init)
 
     this.addToPropertyEdgeDeclaration(node)
+
+    // TODO(oxisto): not the right place for hits
+    // add to scope
+    node.scope?.addSymbol(node)
 
     return node
 }
