@@ -26,6 +26,7 @@
 package de.fraunhofer.aisec.cpg.graph
 
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.BinaryOperator
+import de.fraunhofer.aisec.cpg.graph.statements.expressions.DeclaredReferenceExpression
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.Expression
 import de.fraunhofer.aisec.cpg.graph.statements.expressions.Literal
 
@@ -55,9 +56,21 @@ interface ArgumentHolder {
     fun addArgument(expression: Expression)
 }
 
+/** Creates a new reference and assigns it to the [ArgumentHolder]. */
+fun ArgumentHolder.ref(
+    to: String,
+    init: (DeclaredReferenceExpression.() -> Unit)? = null
+): DeclaredReferenceExpression {
+    val node = new(to, parent = this as? Node, init = init)
+
+    // this.addArgument(node)
+
+    return node
+}
+
 /** Creates a new literal and assigns it to the [ArgumentHolder]. */
 fun <T> ArgumentHolder.literal(value: T, init: (Literal<T>.() -> Unit)? = null): Literal<T> {
-    val node = new(init = init)
+    val node = new(parent = this as? Node, init = init)
     node.value = value
 
     this.addArgument(node)
@@ -67,10 +80,14 @@ fun <T> ArgumentHolder.literal(value: T, init: (Literal<T>.() -> Unit)? = null):
 
 /** Creates a new binary operator and assigns it to the [ArgumentHolder]. */
 fun ArgumentHolder.binOp(operatorCode: String, init: BinaryOperator.() -> Unit): BinaryOperator {
-    val node = new(init = init)
+    val node = new(parent = this as? Node, init = init)
     node.operatorCode = operatorCode
 
     this.addArgument(node)
+
+    // a little bit hacky but works for now
+    node.lhs?.parent = node
+    node.rhs?.parent = node
 
     return node
 }
