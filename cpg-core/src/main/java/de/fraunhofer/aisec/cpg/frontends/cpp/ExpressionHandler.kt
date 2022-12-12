@@ -425,7 +425,7 @@ class ExpressionHandler(lang: CXXLanguageFrontend) :
                     UnknownType.getUnknownType(language),
                     reference.name
                 )
-            member.location = frontend.getLocationFromRawNode<Expression>(reference)
+            member.location = frontend.getLocationFromRawNode(ctx.functionNameExpression)
             callExpression =
                 newMemberCallExpression(
                     member.name,
